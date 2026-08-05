@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "swch_optimiser"
+name = "swchoptimiser"
 version = "0.1.0"
 description = "MiniZinc-based optimiser for pod/node reconfiguration decisions"
 authors = ["Jozsef Kovacs <jozsef.kovacs@sztaki.hu>"]
@@ -13,6 +13,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Libraries",
 ]
+packages = [{ include = "swch_optimiser" }]
 
 [tool.poetry.dependencies]
 python = "^3.12"
