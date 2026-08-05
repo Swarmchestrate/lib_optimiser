@@ -2,7 +2,7 @@
 
 A Python wrapper around [MiniZinc](https://www.minizinc.org/) for solving system reconfiguration problems: given the current mapping of pods (microservice instances) to nodes plus an application-specific rule set, `SwchOptimiser` finds an optimal next mapping (including scaling nodes/pods up or down) and turns the result into a list of concrete actions (`create_ms`, `destroy_ms`, `create_node`, `destroy_node`).
 
-Application-specific constraints and the optimisation goal are written in MiniZinc and passed in as a rule string; the library supplies the shared system parameters (`sys_*`) that every rule set builds on.
+Application-specific constants, parameters, constraints, and the optimisation goal are written in MiniZinc and passed in as a self-contained rule string, which must also declare the shared system parameters (`sys_*`) that every rule set builds on — see [Usage](#usage).
 
 ## Requirements
 
@@ -11,7 +11,21 @@ Application-specific constraints and the optimisation goal are written in MiniZi
 
 ## Installation
 
-This project uses [Poetry](https://python-poetry.org/):
+To use the published package in your own project, add it to your `requirements.txt`:
+
+```
+swchoptimiser==0.1.0
+```
+
+then `pip install -r requirements.txt`. Note that the **PyPI distribution name** (`swchoptimiser`) is not the same as the **Python import name** (`swch_optimiser`, with an underscore) — you install one, but import the other:
+
+```python
+from swch_optimiser import SwchOptimiser
+```
+
+`pip` also pulls in the `minizinc` Python package automatically as a dependency — you don't need to list it separately. It does **not** install MiniZinc/Gecode themselves; see [Requirements](#requirements) above.
+
+To work on this repository itself, it uses [Poetry](https://python-poetry.org/):
 
 ```bash
 poetry install
@@ -19,16 +33,30 @@ poetry install
 
 ## Usage
 
+Every rule string you pass in must be **self-contained**: `SwchOptimiser` does not inject any system parameters for you, so the rule needs to declare the reserved `sys_*` inputs/outputs itself, in addition to your application-specific constants, parameters, constraints, and optimisation goal.
+
 ```python
 from swch_optimiser import SwchOptimiser
 
 rule = r"""
+    % --- SYSTEM PARAMETERS: required by every rule ---
+    int: sys_pod_count_max;
+    int: sys_node_count_max;
+    int: sys_node_count_actual;
+    array[1..sys_pod_count_max] of int: sys_mapping_actual;
+    var 1..sys_node_count_max: sys_node_count_next :: add_to_output;
+    array[1..sys_pod_count_max] of var 0..sys_node_count_max: sys_mapping_next :: add_to_output;
+    var 0..sys_pod_count_max: sys_pod_count_next = sum(p in 1..sys_pod_count_max)(sys_mapping_next[p] > 0);
+    int: sys_pod_count_actual = sum(p in 1..sys_pod_count_max)(sys_mapping_actual[p] > 0);
+
     % --- APPLICATION CONSTANTS ---
     float: threshold_min_node_load;
     float: threshold_max_node_load;
     % --- APPLICATION PARAMETERS ---
     array[1..sys_node_count_actual] of float: node_load;
 
+    % keep node count fixed unless your rule explicitly scales it
+    constraint sys_node_count_next = sys_node_count_actual;
     constraint sys_pod_count_next >= 1;
     % ... additional constraints ...
 
@@ -82,7 +110,7 @@ The public API is a single class, `SwchOptimiser`, exported from `swch_optimiser
 
 | Call | Description |
 |---|---|
-| `SwchOptimiser(rule_app: str, mslist: list = None)` | Builds the MiniZinc model (`rule_sys` + your `rule_app`) and instantiates it against the Gecode solver. Any MiniZinc build error is captured, not raised — check `get_error()` afterward. |
+| `SwchOptimiser(rule: str, mslist: list = None)` | Builds the MiniZinc model from your self-contained `rule` string (see [Usage](#usage) — it must declare the `sys_*` system parameters itself) and instantiates it against the Gecode solver. Any MiniZinc build error is captured, not raised — check `get_error()` afterward. |
 
 ### Input setup
 
