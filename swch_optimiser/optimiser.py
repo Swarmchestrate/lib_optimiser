@@ -26,22 +26,6 @@ class SwchOptimiser:
     reconfig_result = None
     elapsed_time = 0
 
-    rule_sys = """
-    % --- SYSTEM PARAMETERS: DO NOT CHANGE, ONLY REFER TO THESE VARIABLES ---
-    % --- INPUTS ---
-    int: sys_pod_count_max; % hard limit for the number of pods (must be >= actual pod count)
-    int: sys_node_count_max; % hard limit for the number of nodes (must be >= actual node count)
-    int: sys_node_count_actual; % number of nodes currently existing in the system
-    array[1..sys_pod_count_max] of int: sys_mapping_actual; % 0: non-existent, otherwise node index
-    % --- OUTPUTS ---
-    var 1..sys_node_count_max: sys_node_count_next :: add_to_output;
-    array[1..sys_pod_count_max] of var 0..sys_node_count_max: sys_mapping_next :: add_to_output; % 0: non-existent, otherwise node index
-    % --- SYSTEM PARAMETERS ENDS HERE ---
-
-    var 0..sys_pod_count_max: sys_pod_count_next = sum(p in 1..sys_pod_count_max)(sys_mapping_next[p] > 0);
-    int: sys_pod_count_actual = sum(p in 1..sys_pod_count_max)(sys_mapping_actual[p] > 0);
-    """
-
     system_input_params_set = {
         "sys_node_count_max",
         "sys_pod_count_max",
@@ -54,9 +38,9 @@ class SwchOptimiser:
         "sys_nodes_to_destroy"
     }
     
-    def __init__(self, rule_app: str = None, mslist: list = None):
+    def __init__(self, rule: str = None, mslist: list = None):
         """Initialize the SwchOrchInterpreter instance."""
-        self.rule = self.rule_sys + rule_app
+        self.rule = rule
         self.mslist = mslist
 
         self.gecode = Solver.lookup("gecode")

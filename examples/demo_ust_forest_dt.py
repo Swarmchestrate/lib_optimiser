@@ -104,6 +104,20 @@ TABLE:
 """
 
 rule = r"""
+    % --- SYSTEM PARAMETERS: DO NOT CHANGE THE FOLLOWING LINES, YOU CAN REFER TO THESE VARIABLES ---
+    % --- INPUTS ---
+    int: sys_pod_count_max; % hard limit for the number of pods (must be >= actual pod count)
+    int: sys_node_count_max; % hard limit for the number of nodes (must be >= actual node count)
+    int: sys_node_count_actual; % number of nodes currently existing in the system
+    array[1..sys_pod_count_max] of int: sys_mapping_actual; % 0: non-existent, otherwise node index
+    % --- OUTPUTS ---
+    var 1..sys_node_count_max: sys_node_count_next :: add_to_output;
+    array[1..sys_pod_count_max] of var 0..sys_node_count_max: sys_mapping_next :: add_to_output; % 0: non-existent, otherwise node index
+    % --- AUXILIARY VARIABLES
+    var 0..sys_pod_count_max: sys_pod_count_next = sum(p in 1..sys_pod_count_max)(sys_mapping_next[p] > 0);
+    int: sys_pod_count_actual = sum(p in 1..sys_pod_count_max)(sys_mapping_actual[p] > 0);
+    % --- SYSTEM PARAMETERS ENDS HERE ---
+
     % --- APPLICATION CONSTANTS ---
     float: threshold_node_load_min;
     float: threshold_node_load_max;
@@ -130,30 +144,33 @@ rule = r"""
     % --- DERIVED PARAMETERS ENDS HERE ---
  
     % --- LIST OF CONSTRAINTS: WHAT ARE THE CONDITIONS WHICH HAS TO BE SATISFIED FOR THE MAPPING---
-    % 1) During nighttime (7PM-7AM), there must be no active pods
+    % 1) This rule never scales the node count, only where pods are placed
+    constraint sys_node_count_next = sys_node_count_actual;
+    
+    % 2) During nighttime (7PM-7AM), there must be no active pods
     constraint is_nighttime -> sys_pod_count_next = 0;
 
-    % 2) During daytime (7AM-7PM), at least one pod must be active
+    % 3) During daytime (7AM-7PM), at least one pod must be active
     constraint is_daytime -> sys_pod_count_next >= 1;
     
-    % 3) Max number of pods per node is 1 (non-zero values must differ)
+    % 4) Max number of pods per node is 1 (non-zero values must differ)
     constraint forall(i, j in 1..sys_pod_count_max where i < j)(
         sys_mapping_next[i] = 0 \/ 
         sys_mapping_next[j] = 0 \/ 
         sys_mapping_next[i] != sys_mapping_next[j]);
 
-    % 3b) Pods can only be mapped to existing nodes (1..sys_node_count_actual)
+    % 5) Pods can only be mapped to existing nodes (1..sys_node_count_actual)
     constraint forall(p in 1..sys_pod_count_max where sys_mapping_next[p] > 0)(
         sys_mapping_next[p] <= sys_node_count_actual);
 
-    % 4) Scale Up: If load > threshold_node_load_max and sys_pod_count_next < sys_pod_count_max and there are available nodes, new count must be greater than initial
+    % 6) Scale Up: If load > threshold_node_load_max and sys_pod_count_next < sys_pod_count_max and there are available nodes, new count must be greater than initial
     constraint (avg_load_on_used_nodes > threshold_node_load_max /\ 
                 sys_pod_count_next < sys_pod_count_max /\
                 sys_pod_count_next < sys_node_count_actual /\
                 is_daytime) -> 
                 sys_pod_count_next > sys_pod_count_actual;
 
-    % 5) Scale Down: If load < threshold_node_load_min and sys_pod_count_actual > 1, new count must be less than initial
+    % 7) Scale Down: If load < threshold_node_load_min and sys_pod_count_actual > 1, new count must be less than initial
     constraint (avg_load_on_used_nodes < threshold_node_load_min /\ 
                 sys_pod_count_actual > 1 /\ 
                 is_daytime) -> 
@@ -186,7 +203,7 @@ input_system["sys_pod_count_max"] = 5
 #input_system["sys_pod_count_actual"] = 3
 #input_system["sys_pod_count_next"] = input_system["sys_pod_count_actual"]
 input_system["sys_node_count_max"] = 5
-input_system["sys_node_count_actual"] = 4
+input_system["sys_node_count_actual"] = 5
 input_system["sys_node_count_next"] = input_system["sys_node_count_actual"]
 #Actual mapping of pods to nodes (initial state)
 input_system["sys_mapping_actual"] = [1, 2, 3, 0, 0]  # nodes 1-3 have 1 pod each, nodes 4-5 unused
@@ -201,7 +218,7 @@ input_constants["threshold_node_load_max"] = 80.0
 #Actual monitoring metrics
 input_metrics = {}
 input_metrics["timestamp_hour"] = 18
-input_metrics["node_load"] = [90.0, 90.0, 90.0, 0.0]  # one value per actual node (nodes 1-4), node 5 unused
+input_metrics["node_load"] = [90.0, 90.0, 90.0, 10.0, 0.0]  # one value per actual node (nodes 1-4), node 5 unused
 
 if __name__ == "__main__":
 

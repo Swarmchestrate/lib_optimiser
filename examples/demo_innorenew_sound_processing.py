@@ -18,6 +18,20 @@ Based on the node_load metrics, we decide whether to scale up or down:
 """
 
 rule = r"""
+    % --- SYSTEM PARAMETERS: DO NOT CHANGE THE FOLLOWING LINES, YOU CAN REFER TO THESE VARIABLES ---
+    % --- INPUTS ---
+    int: sys_pod_count_max; % hard limit for the number of pods (must be >= actual pod count)
+    int: sys_node_count_max; % hard limit for the number of nodes (must be >= actual node count)
+    int: sys_node_count_actual; % number of nodes currently existing in the system
+    array[1..sys_pod_count_max] of int: sys_mapping_actual; % 0: non-existent, otherwise node index
+    % --- OUTPUTS ---
+    var 1..sys_node_count_max: sys_node_count_next :: add_to_output;
+    array[1..sys_pod_count_max] of var 0..sys_node_count_max: sys_mapping_next :: add_to_output; % 0: non-existent, otherwise node index
+    % --- AUXILIARY VARIABLES
+    var 0..sys_pod_count_max: sys_pod_count_next = sum(p in 1..sys_pod_count_max)(sys_mapping_next[p] > 0);
+    int: sys_pod_count_actual = sum(p in 1..sys_pod_count_max)(sys_mapping_actual[p] > 0);
+    % --- SYSTEM PARAMETERS ENDS HERE ---
+
     % --- APPLICATION CONSTANTS ---
     float: threshold_node_temperature;
     float: threshold_min_node_load;
@@ -89,9 +103,9 @@ input_system = {}
 #Limits for pods and nodes
 input_system["sys_pod_count_max"] = 5
 input_system["sys_node_count_max"] = 5
-input_system["sys_node_count_actual"] = 3
+input_system["sys_node_count_actual"] = 5
 #Actual mapping of pods to nodes (initial state)
-input_system["sys_mapping_actual"] = [1, 2, 3, 0, 0]
+input_system["sys_mapping_actual"] = [1, 3, 4, 0, 0]
 
 #APPLICATION PARAMETERS
 #Constants
