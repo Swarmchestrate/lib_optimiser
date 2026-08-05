@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "swch_optimiser"
+version = "0.1.0"
+description = "MiniZinc-based optimiser for pod/node reconfiguration decisions"
+authors = ["Jozsef Kovacs <jozsef.kovacs@sztaki.hu>"]
+readme = "README.md"
+license = "MIT"
+keywords = ["optimization", "minizinc", "constraint-programming", "autoscaling"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries",
+]
+
+[tool.poetry.dependencies]
+python = "^3.12"
+minizinc = "^0.10.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
