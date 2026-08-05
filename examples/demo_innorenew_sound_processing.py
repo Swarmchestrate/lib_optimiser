@@ -44,6 +44,9 @@ rule = r"""
     % 1) Minimum number of pods is 1
     constraint sys_pod_count_next >= 1;
 
+    % 1b) This rule never scales the node count, only where pods are placed
+    constraint sys_node_count_next = sys_node_count_actual;
+
     % 2) Max number of pods per node is 1 (non-zero values must differ)
     constraint forall(i, j in 1..sys_pod_count_max where i < j)(
         sys_mapping_next[i] = 0 \/ sys_mapping_next[j] = 0 \/ sys_mapping_next[i] != sys_mapping_next[j]
