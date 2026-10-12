@@ -48,9 +48,24 @@ class SwchOptimiser:
         self.model.add_string(self.rule)
         try:
             self.instance = Instance(self.gecode, self.model)
-            self.error = None   
+            self.error = self._check_system_naming()
         except MiniZincError as e:
             self.error = self._format_minizinc_error(e)
+
+    def _check_system_naming(self):
+        """A rule must use only one naming style for its system variables: either all
+        plain ("sys_<varname>") or all microservice-prefixed ("<msname>_sys_<varname>")."""
+        plain, prefixed = [], []
+        for key in list(self.instance.input) + list(self.instance.output):
+            split = self._split_system_key(key, self.system_input_params_set | self.system_outputs_params_set)
+            if split is not None:
+                (prefixed if split[0] else plain).append(key)
+        if plain and prefixed:
+            return ("Error: system variables must use only one naming style, either \"sys_<varname>\" "
+                    "or \"<msname>_sys_<varname>\".\n"
+                    f"\tplain: {', '.join(plain)}\n"
+                    f"\tprefixed: {', '.join(prefixed)}")
+        return None
 
     def _format_minizinc_error(self, err: MiniZincError) -> str:
         import re as _re
@@ -105,6 +120,35 @@ class SwchOptimiser:
     def get_error(self):
         return self.error
 
+    def _split_system_key(self, key: str, param_set: set):
+        """Split a system parameter name into (ms_prefix, base_name).
+        The microservice name is everything before the first "_sys_" in the name
+        ("audio_class_sys_mapping_actual" -> ("audio_class", "sys_mapping_actual")).
+        A name starting with "sys_" has no microservice prefix and the prefix is "".
+        Returns None if the key is not a system parameter of the given set."""
+        idx = key.find("_sys_")
+        if idx > 0:
+            prefix, base = key[:idx], key[idx+1:]
+        elif key.startswith("sys_"):
+            prefix, base = "", key
+        else:
+            return None
+        for param_name in param_set:
+            if base.startswith(param_name):
+                return (prefix, base)
+        return None
+
+    def _is_system_key(self, key: str, param_set: set):
+        return self._split_system_key(key, param_set) is not None
+
+    def _get_by_base_name(self, values: dict, base_name: str, param_set: set):
+        """Return the value of the first key whose base name (prefix stripped) equals base_name."""
+        for key, value in values.items():
+            split = self._split_system_key(key, param_set)
+            if split is not None and split[1] == base_name:
+                return value
+        return None
+
     def add_input_system(self, system: dict):
         self.input_system = system
         return
@@ -140,19 +184,15 @@ class SwchOptimiser:
         all_inputs = self.instance.input        
         system_inputs = {}
         for key, value in all_inputs.items():
-            for param_name in self.system_input_params_set:
-                if key.startswith(param_name):
-                    system_inputs[key] = value
+            if self._is_system_key(key, self.system_input_params_set):
+                system_inputs[key] = value
         return system_inputs
     
     def query_appspec_inputs(self):
         all_inputs = self.instance.input
         appspec_inputs = {}
         for key, value in all_inputs.items():
-            for param_name in self.system_input_params_set:
-                if key.startswith(param_name):
-                    break
-            else:
+            if not self._is_system_key(key, self.system_input_params_set):
                 appspec_inputs[key] = value
         return appspec_inputs
 
@@ -160,19 +200,14 @@ class SwchOptimiser:
         all_outputs = self.instance.output
         system_outputs = {}
         for key, value in all_outputs.items():
-            for param_name in self.system_outputs_params_set:
-                if key.startswith(param_name):
-                    system_outputs[key] = value
-                    break
+            if self._is_system_key(key, self.system_outputs_params_set):
+                system_outputs[key] = value
         return system_outputs
 
     def get_appspec_input_parameter_values(self):
         appspec_input_values = {}
         for param_name in self.all_inputs:
-            for system_input_param in self.system_input_params_set:
-                if param_name.startswith(system_input_param):
-                    break
-            else:
+            if not self._is_system_key(param_name, self.system_input_params_set):
                 appspec_input_values[param_name] = self.all_inputs[param_name]
         return appspec_input_values
     
@@ -184,10 +219,8 @@ class SwchOptimiser:
     def get_system_input_parameter_values(self):
         system_input_values = {}
         for param_name in self.all_inputs:
-            for system_input_param in self.system_input_params_set:
-                if param_name.startswith(system_input_param):
-                    system_input_values[param_name] = self.all_inputs[param_name]
-                    break
+            if self._is_system_key(param_name, self.system_input_params_set):
+                system_input_values[param_name] = self.all_inputs[param_name]
         return system_input_values
 
     def dump_system_input_parameter_values(self):
@@ -198,10 +231,8 @@ class SwchOptimiser:
     def get_system_output_parameter_values(self):
         system_output_values = {}
         for param_name, param_value in vars(self.reconfig_result.solution).items():
-            for system_output_param in self.system_outputs_params_set:
-                if param_name.startswith(system_output_param):
-                    system_output_values[param_name] = param_value
-                    break
+            if self._is_system_key(param_name, self.system_outputs_params_set):
+                system_output_values[param_name] = param_value
         return system_output_values
     
     def dump_system_output_parameter_values(self):
@@ -231,11 +262,16 @@ class SwchOptimiser:
         return self.elapsed_time
     
     def generate_actions(self):
-        mapping_inputs = {key: value for (key, value) in self.query_system_inputs().items() if key.startswith("sys_mapping_actual")}
-        mapping_outputs = {key: value for (key, value) in self.query_outputs().items() if key.startswith("sys_mapping_next")}
+        mapping_inputs = {}
+        for key in self.query_system_inputs():
+            prefix, base = self._split_system_key(key, self.system_input_params_set)
+            if base.startswith("sys_mapping_actual"):
+                mapping_inputs[key] = (prefix, base)
+        mapping_outputs = {key for key in self.query_outputs()
+                           if self._split_system_key(key, self.system_outputs_params_set)[1].startswith("sys_mapping_next")}
 
-        node_count_actual = self.get_system_input_parameter_values().get("sys_node_count_actual", None)
-        node_count_next = self.get_system_output_parameter_values().get("sys_node_count_next", None)
+        node_count_actual = self._get_by_base_name(self.get_system_input_parameter_values(), "sys_node_count_actual", self.system_input_params_set)
+        node_count_next = self._get_by_base_name(self.get_system_output_parameter_values(), "sys_node_count_next", self.system_outputs_params_set)
         actions = []
 
         if node_count_actual is not None and node_count_next is not None:
@@ -251,24 +287,28 @@ class SwchOptimiser:
         #pair, so their presence alone doesn't tell us whether the app rule is using the
         #single-microservice or the multiple-microservices ("sys_mapping_actual_X") pattern;
         #only the presence of suffixed keys does
-        suffixed_mapping_inputs = {key: value for key, value in mapping_inputs.items() if key != "sys_mapping_actual"}
+        suffixed_mapping_inputs = {key: pb for key, pb in mapping_inputs.items() if pb[1] != "sys_mapping_actual"}
 
-        if not suffixed_mapping_inputs and ("sys_mapping_actual" in mapping_inputs) and ("sys_mapping_next" in mapping_outputs):
-            #handle single microservice mapping case
-            actions.extend(self.generate_actions_for_one_ms(self.mslist[0] if self.mslist else "undefined_ms", mi="sys_mapping_actual", mf="sys_mapping_next"))
-        else:
-            #handle multiple microservices mapping case (if there are multiple "sys_mapping_actual_X" and "sys_mapping_next_X" parameters)
-            for mapping_actual_key in suffixed_mapping_inputs:
-                mapping_next_key = mapping_actual_key.replace("sys_mapping_actual", "sys_mapping_next")
-                if mapping_next_key in mapping_outputs:
-                    ms = f"{mapping_actual_key.split('_')[-1]}"
-                    actions.extend(self.generate_actions_for_one_ms(ms, mi=mapping_actual_key, mf=mapping_next_key))
-        
+        for mapping_actual_key, (prefix, base) in (suffixed_mapping_inputs or mapping_inputs).items():
+            mapping_next_key = mapping_actual_key.replace("sys_mapping_actual", "sys_mapping_next")
+            if mapping_next_key not in mapping_outputs:
+                continue
+            if base != "sys_mapping_actual":
+                #multiple microservices mapping case ("sys_mapping_actual_X")
+                ms = base[len("sys_mapping_actual_"):]
+            elif prefix:
+                #microservice-prefixed mapping case ("X_sys_mapping_actual")
+                ms = prefix
+            else:
+                #single microservice mapping case
+                ms = self.mslist[0] if self.mslist else "undefined_ms"
+            actions.extend(self.generate_actions_for_one_ms(ms, mi=mapping_actual_key, mf=mapping_next_key, prefix=prefix))
+
         return actions
 
-    def generate_actions_for_one_ms(self, ms: str = "undefined_ms", mi: str = "sys_mapping_actual", mf: str = "sys_mapping_next"):
+    def generate_actions_for_one_ms(self, ms: str = "undefined_ms", mi: str = "sys_mapping_actual", mf: str = "sys_mapping_next", prefix: str = ""):
         actions = []
-        max_pods = self.input_system["sys_pod_count_max"]
+        max_pods = self.input_system[prefix+"_sys_pod_count_max" if prefix else "sys_pod_count_max"]
         mapping_init = self.input_system[mi]
         mapping_next = self.reconfig_result[mf]
         for p in range(max_pods):

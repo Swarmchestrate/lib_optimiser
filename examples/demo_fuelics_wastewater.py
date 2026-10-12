@@ -36,30 +36,47 @@ Based on the actual_requestpersec metrics, we decide how many pods to run:
 """
 
 rule = r"""
-    % --- SYSTEM PARAMETERS: DO NOT CHANGE THE FOLLOWING LINES, YOU CAN REFER TO THESE VARIABLES ---
+    % --- SYSTEM PARAMETERS OF "norain": DO NOT CHANGE THE FOLLOWING LINES, YOU CAN REFER TO THESE VARIABLES ---
     % --- INPUTS ---
-    int: sys_pod_count_max; % hard limit for the number of pods (must be >= actual pod count)
-    int: sys_node_count_max; % hard limit for the number of nodes (must be >= actual node count)
-    int: sys_node_count_actual; % number of nodes currently existing in the system
-    array[1..sys_pod_count_max] of int: sys_mapping_actual; % 0: non-existent, otherwise node index
+    int: norain_sys_pod_count_max; % hard limit for the number of pods (must be >= actual pod count)
+    int: norain_sys_node_count_max; % hard limit for the number of nodes (must be >= actual node count)
+    int: norain_sys_node_count_actual; % number of nodes currently existing in the system
+    array[1..norain_sys_pod_count_max] of int: norain_sys_mapping_actual; % 0: non-existent, otherwise node index
     % --- OUTPUTS ---
-    var 1..sys_node_count_max: sys_node_count_next :: add_to_output;
-    array[1..sys_pod_count_max] of var 0..sys_node_count_max: sys_mapping_next :: add_to_output; % 0: non-existent, otherwise node index
+    var 1..norain_sys_node_count_max: norain_sys_node_count_next :: add_to_output;
+    array[1..norain_sys_pod_count_max] of var 0..norain_sys_node_count_max: norain_sys_mapping_next :: add_to_output; % 0: non-existent, otherwise node index
     % --- AUXILIARY VARIABLES
-    var 0..sys_pod_count_max: sys_pod_count_next = sum(p in 1..sys_pod_count_max)(sys_mapping_next[p] > 0);
-    int: sys_pod_count_actual = sum(p in 1..sys_pod_count_max)(sys_mapping_actual[p] > 0);
-    % --- SYSTEM PARAMETERS ENDS HERE ---
+    var 0..norain_sys_pod_count_max: norain_sys_pod_count_next = sum(p in 1..norain_sys_pod_count_max)(norain_sys_mapping_next[p] > 0);
+    int: norain_sys_pod_count_actual = sum(p in 1..norain_sys_pod_count_max)(norain_sys_mapping_actual[p] > 0);
+    % --- SYSTEM PARAMETERS OF "norain" ENDS HERE ---
 
-    % --- SYSTEM PARAMETERS: DO NOT CHANGE, ONLY REFER TO THESE VARIABLES ---
+    % --- SYSTEM PARAMETERS OF "average": DO NOT CHANGE THE FOLLOWING LINES, YOU CAN REFER TO THESE VARIABLES ---
     % --- INPUTS ---
-    array[1..sys_pod_count_max] of int: sys_mapping_actual_norain; % 0: non-existent, otherwise node index
-    array[1..sys_pod_count_max] of int: sys_mapping_actual_average; % 0: non-existent, otherwise node index
-    array[1..sys_pod_count_max] of int: sys_mapping_actual_heavy; % 0: non-existent, otherwise node index
+    int: average_sys_pod_count_max; % hard limit for the number of pods (must be >= actual pod count)
+    int: average_sys_node_count_max; % hard limit for the number of nodes (must be >= actual node count)
+    int: average_sys_node_count_actual; % number of nodes currently existing in the system
+    array[1..average_sys_pod_count_max] of int: average_sys_mapping_actual; % 0: non-existent, otherwise node index
     % --- OUTPUTS ---
-    array[1..sys_pod_count_max] of var 0..sys_node_count_max: sys_mapping_next_norain :: add_to_output;
-    array[1..sys_pod_count_max] of var 0..sys_node_count_max: sys_mapping_next_average :: add_to_output;
-    array[1..sys_pod_count_max] of var 0..sys_node_count_max: sys_mapping_next_heavy :: add_to_output;   
-    % --- SYSTEM PARAMETERS ENDS HERE ---
+    var 1..average_sys_node_count_max: average_sys_node_count_next :: add_to_output;
+    array[1..average_sys_pod_count_max] of var 0..average_sys_node_count_max: average_sys_mapping_next :: add_to_output; % 0: non-existent, otherwise node index
+    % --- AUXILIARY VARIABLES
+    var 0..average_sys_pod_count_max: average_sys_pod_count_next = sum(p in 1..average_sys_pod_count_max)(average_sys_mapping_next[p] > 0);
+    int: average_sys_pod_count_actual = sum(p in 1..average_sys_pod_count_max)(average_sys_mapping_actual[p] > 0);
+    % --- SYSTEM PARAMETERS OF "average" ENDS HERE ---
+
+    % --- SYSTEM PARAMETERS OF "heavy": DO NOT CHANGE THE FOLLOWING LINES, YOU CAN REFER TO THESE VARIABLES ---
+    % --- INPUTS ---
+    int: heavy_sys_pod_count_max; % hard limit for the number of pods (must be >= actual pod count)
+    int: heavy_sys_node_count_max; % hard limit for the number of nodes (must be >= actual node count)
+    int: heavy_sys_node_count_actual; % number of nodes currently existing in the system
+    array[1..heavy_sys_pod_count_max] of int: heavy_sys_mapping_actual; % 0: non-existent, otherwise node index
+    % --- OUTPUTS ---
+    var 1..heavy_sys_node_count_max: heavy_sys_node_count_next :: add_to_output;
+    array[1..heavy_sys_pod_count_max] of var 0..heavy_sys_node_count_max: heavy_sys_mapping_next :: add_to_output; % 0: non-existent, otherwise node index
+    % --- AUXILIARY VARIABLES
+    var 0..heavy_sys_pod_count_max: heavy_sys_pod_count_next = sum(p in 1..heavy_sys_pod_count_max)(heavy_sys_mapping_next[p] > 0);
+    int: heavy_sys_pod_count_actual = sum(p in 1..heavy_sys_pod_count_max)(heavy_sys_mapping_actual[p] > 0);
+    % --- SYSTEM PARAMETERS OF "heavy" ENDS HERE ---
 
     % --- APPLICATION CONSTANTS ---
     float: threshold_max_norain;
@@ -74,52 +91,49 @@ rule = r"""
     % --- APPLICATION PARAMETERS ENDS HERE ---
 
     % --- DERIVED PARAMETERS WHICH MAKES CONSTRAINTS AND OPTIMISATION GOAL EASIER TO BE EXPRESSED ---
-    int: sys_pod_count_actual_norain = sum(p in 1..sys_pod_count_max)(sys_mapping_actual_norain[p] > 0);
-    int: sys_pod_count_actual_average = sum(p in 1..sys_pod_count_max)(sys_mapping_actual_average[p] > 0);
-    int: sys_pod_count_actual_heavy = sum(p in 1..sys_pod_count_max)(sys_mapping_actual_heavy[p] > 0);
-
-    var int: sys_pod_count_next_norain = sum(p in 1..sys_pod_count_max)(sys_mapping_next_norain[p] > 0);
-    var int: sys_pod_count_next_average = sum(p in 1..sys_pod_count_max)(sys_mapping_next_average[p] > 0);
-    var int: sys_pod_count_next_heavy = sum(p in 1..sys_pod_count_max)(sys_mapping_next_heavy[p] > 0);
-    var int: sys_pod_count_next_total = sys_pod_count_next_norain + sys_pod_count_next_average + sys_pod_count_next_heavy;
+    int: pod_count_max = min([norain_sys_pod_count_max, average_sys_pod_count_max, heavy_sys_pod_count_max]);
+    int: pod_count_actual_total = norain_sys_pod_count_actual + average_sys_pod_count_actual + heavy_sys_pod_count_actual;
+    var int: pod_count_next_total = norain_sys_pod_count_next + average_sys_pod_count_next + heavy_sys_pod_count_next;
     % --- DERIVED PARAMETERS ENDS HERE ---
 
     % --- LIST OF CONSTRAINTS: WHAT ARE THE CONDITIONS WHICH HAS TO BE SATISFIED FOR THE MAPPING---
     % 1) This rule never scales the node count, only where pods are placed
-    constraint sys_node_count_next = sys_node_count_actual;
+    constraint norain_sys_node_count_next = norain_sys_node_count_actual;
+    constraint average_sys_node_count_next = average_sys_node_count_actual;
+    constraint heavy_sys_node_count_next = heavy_sys_node_count_actual;
     
     % 1) Always keep at least one pod running total
-    constraint sys_pod_count_next_total >= 1;
+    constraint pod_count_next_total >= 1;
 
     % 2) Only one category can be active at a time (mutual exclusion)
-    constraint (sys_pod_count_next_norain > 0 /\ sys_pod_count_next_average = 0 /\ sys_pod_count_next_heavy = 0) \/
-               (sys_pod_count_next_norain = 0 /\ sys_pod_count_next_average > 0 /\ sys_pod_count_next_heavy = 0) \/
-               (sys_pod_count_next_norain = 0 /\ sys_pod_count_next_average = 0 /\ sys_pod_count_next_heavy > 0);
+    constraint (norain_sys_pod_count_next > 0 /\ average_sys_pod_count_next = 0 /\ heavy_sys_pod_count_next = 0) \/
+               (norain_sys_pod_count_next = 0 /\ average_sys_pod_count_next > 0 /\ heavy_sys_pod_count_next = 0) \/
+               (norain_sys_pod_count_next = 0 /\ average_sys_pod_count_next = 0 /\ heavy_sys_pod_count_next > 0);
 
     % 3) Rainfall-based category selection
     % NORAIN
     % If expected_rainfall <= threshold_max_norain: only "no rain" pods active
     constraint expected_rainfall <= threshold_max_norain -> 
-        (sys_pod_count_next_norain >= 1 /\ sys_pod_count_next_average = 0 /\ sys_pod_count_next_heavy = 0);
+        (norain_sys_pod_count_next >= 1 /\ average_sys_pod_count_next = 0 /\ heavy_sys_pod_count_next = 0);
     
     % AVERAGE RAIN
     % If threshold_max_norain < expected_rainfall <= threshold_max_average: only "average rain" pods active
     constraint (expected_rainfall > threshold_max_norain /\ expected_rainfall <= threshold_max_average) -> 
-        (sys_pod_count_next_norain = 0 /\ sys_pod_count_next_average >= 1 /\ sys_pod_count_next_heavy = 0);
+        (norain_sys_pod_count_next = 0 /\ average_sys_pod_count_next >= 1 /\ heavy_sys_pod_count_next = 0);
     
     % HEAVY RAIN
     % If expected_rainfall >= threshold_max_average: only "heavy rain" pods active
     constraint expected_rainfall >= threshold_max_average -> 
-        (sys_pod_count_next_norain = 0 /\ sys_pod_count_next_average = 0 /\ sys_pod_count_next_heavy >= 1);
+        (norain_sys_pod_count_next = 0 /\ average_sys_pod_count_next = 0 /\ heavy_sys_pod_count_next >= 1);
 
     % 4) Scale Up based on requests/sec: only if current total pods are below max_pods
-    constraint (actual_requestpersec > threshold_max_requestpersec /\ sys_pod_count_next_total < sys_pod_count_max) -> 
-        sys_pod_count_next_total > (sys_pod_count_actual_norain + sys_pod_count_actual_average + sys_pod_count_actual_heavy);
+    constraint (actual_requestpersec > threshold_max_requestpersec /\ pod_count_next_total < pod_count_max) -> 
+        pod_count_next_total > pod_count_actual_total;
 
     % 5) Scale Down based on requests/sec: only if initial total pods is > 1
     constraint (actual_requestpersec < threshold_min_requestpersec /\
-               (sys_pod_count_actual_norain + sys_pod_count_actual_average + sys_pod_count_actual_heavy) > 1) -> 
-        sys_pod_count_next_total < (sys_pod_count_actual_norain + sys_pod_count_actual_average + sys_pod_count_actual_heavy);
+               pod_count_actual_total > 1) -> 
+        pod_count_next_total < pod_count_actual_total;
     % --- LIST OF CONSTRAINTS ENDS HERE ---
 
     % --- OPTIMISATION GOAL: DEFINITION OF THE LOSS FUNCTION TO BE MINIMIZED ---
@@ -129,11 +143,11 @@ rule = r"""
     % - A smaller loss for changing total pod count (to minimize unnecessary scaling actions)
     var int: loss =
         % Penalty for migrating pods in each category
-        1000 * (sum(p in 1..sys_pod_count_max)(bool2int(sys_mapping_next_norain[p] != sys_mapping_actual_norain[p])) +
-            sum(p in 1..sys_pod_count_max)(bool2int(sys_mapping_next_average[p] != sys_mapping_actual_average[p])) +
-            sum(p in 1..sys_pod_count_max)(bool2int(sys_mapping_next_heavy[p] != sys_mapping_actual_heavy[p]))) +
+        1000 * (sum(p in 1..norain_sys_pod_count_max)(bool2int(norain_sys_mapping_next[p] != norain_sys_mapping_actual[p])) +
+            sum(p in 1..average_sys_pod_count_max)(bool2int(average_sys_mapping_next[p] != average_sys_mapping_actual[p])) +
+            sum(p in 1..heavy_sys_pod_count_max)(bool2int(heavy_sys_mapping_next[p] != heavy_sys_mapping_actual[p]))) +
         % Penalty for changing total pod count
-        100 * abs((sys_pod_count_actual_norain + sys_pod_count_actual_average + sys_pod_count_actual_heavy) - sys_pod_count_next_total);
+        100 * abs(pod_count_actual_total - pod_count_next_total);
     % --- OPTIMISATION GOAL ENDS HERE ---
 
     % --- SOLVE THE OPTIMISATION PROBLEM: DO NOT CHANGE THE FOLLOWING LINE ---
@@ -143,16 +157,19 @@ rule = r"""
 input_system = {}
 #SYSTEM PARAMETERS
 #Limits for pods and nodes
-input_system["sys_pod_count_max"] = 5
-input_system["sys_node_count_max"] = 5
-input_system["sys_node_count_actual"] = 5
-#sys_mapping_actual is required by the base model but unused by this app's
-#rule (which tracks per-category mappings below instead)
-input_system["sys_mapping_actual"] = [0, 0, 0, 0, 0]
+input_system["norain_sys_pod_count_max"] = 5
+input_system["norain_sys_node_count_max"] = 5
+input_system["norain_sys_node_count_actual"] = 5
+input_system["average_sys_pod_count_max"] = 5
+input_system["average_sys_node_count_max"] = 5
+input_system["average_sys_node_count_actual"] = 5
+input_system["heavy_sys_pod_count_max"] = 5
+input_system["heavy_sys_node_count_max"] = 5
+input_system["heavy_sys_node_count_actual"] = 5
 #Actual mapping of pods to nodes (initial state)
-input_system["sys_mapping_actual_norain"] = [1, 0, 0, 0, 0]
-input_system["sys_mapping_actual_average"] = [0, 0, 0, 0, 0]
-input_system["sys_mapping_actual_heavy"] = [0, 0, 0, 0, 0]
+input_system["norain_sys_mapping_actual"] = [1, 0, 0, 0, 0]
+input_system["average_sys_mapping_actual"] = [0, 0, 0, 0, 0]
+input_system["heavy_sys_mapping_actual"] = [0, 0, 0, 0, 0]
 
 #APPLICATION PARAMETERS
 #Constants

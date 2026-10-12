@@ -121,7 +121,7 @@ input_metrics["node_load"] = [90.0, 10.0, 70.0, 90.0, 10.0]
 
 if __name__ == "__main__":
 
-    mslist = ["soundprocessing"]
+    mslist = ["audio_class"]
     optimiser = SwchOptimiser(rule, mslist)
     if optimiser.get_error() is not None:
         print(f"\n{optimiser.get_error()}")
