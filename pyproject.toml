@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "swchoptimiser"
-version = "0.1.0"
+version = "0.2.0"
 description = "MiniZinc-based optimiser for pod/node reconfiguration decisions"
 authors = ["Jozsef Kovacs <jozsef.kovacs@sztaki.hu>"]
 readme = "README.md"
